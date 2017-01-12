@@ -1,18 +1,26 @@
-annealing <- function(costFunc, initialPos, temperatureFunc, infoConsumerFunc ){
-  bestPos <- initialPos
-  
-  for( k in 1:100){
+require('fields')
+
+annealing <- function(costFunc, initialPos, temperatureFunc, infoConsumerFunc, stoppingFunc, neighbourGenerator ){
+  currentPos <- bestPos <- initialPos
+  message( sprintf("Iterac\tTemp\t\tFKosztu\t\tBestPos\t\t\tCurrVal\t\tCurrPos"))
+  k <- 0
+  while( !stoppingFunc(k)){
     temperature <- temperatureFunc(k)
-    rand <-  rnorm( 2, bestPos, 1)
-    randomNeighbour <- c( max(0,  rand[0]), max(0,  rand[1]))
+    randomNeighbour <- neighbourGenerator(currentPos)
+
     if( costFunc (randomNeighbour) > costFunc(bestPos) ){
-      bestPos <- randomNeighbour;
-    } else if ( runif(1,0,1) < exp( - abs(  costFunc (randomNeighbour)-costFunc(bestPos)  )/temperature  )){
-      bestPos <- randomNeighbour;
+      currentPos <- bestPos <- randomNeighbour;
+    } else if (costFunc (randomNeighbour) > costFunc(currentPos) ){
+      currentPos  <- randomNeighbour;
+    } else if ( runif(1,0,1) < exp( - abs(  costFunc (randomNeighbour)-costFunc(currentPos)  )/temperature  )){
+      currentPos <- randomNeighbour;
     }
-    infoConsumerFunc(bestPos, randomNeighbour)
-    message( sprintf("%i\t%.6f\t%.6f\t%.6f\t%.6f", k, temperature,costFunc(bestPos), bestPos[1], bestPos[2]))
+    infoConsumerFunc(bestPos, currentPos, randomNeighbour)
+    message( sprintf("%i\t%.6f\t%.6f\t[%.6f:%.6f]\t%.6f\t[%.6f:%.6f]",
+                     k, temperature,costFunc(bestPos), bestPos[1], bestPos[2],costFunc(currentPos), currentPos[1], currentPos[2]))
+    k <- k + 1
   }
+   bestPos
 }
 
 perlin_noise <- function( 
@@ -58,42 +66,69 @@ perlin_noise <- function(
   outer( xs, ys, Vectorize(f) )
 }
 
-matx <- perlin_noise()
-
-funcX <- function( pos ){
-   
-   matx[ pos[1], pos[2]]
-}
+#matx <- perlin_noise()
 
 funcY <- function( pos ){
-  x1Val <- funcX( c( floor(pos[1]), pos[2]) )
-  x2Val <- funcX( c( ceiling(pos[1]), pos[2]) )
-  y1Val <- funcX( c( pos[1], floor(pos[2]) ))
-  y2Val <- funcX( c( pos[1], ceiling(pos[2]) ))
+  fourCorners = list( 
+      c( floor(pos[1]), floor(pos[2]) ),  
+      c( ceiling(pos[1]), floor(pos[2]) ), 
+      c( floor(pos[1]), ceiling(pos[2]) ),
+      c( ceiling(pos[1]), ceiling(pos[2]) ))
   
-  x <- pos[1] - floor(pos[1])
-  y <- pos[2] - floor(pos[2])
+  s <- norm(pos-c( ceiling(pos[1]), ceiling(pos[2])), type="2")
   
-  ( x + y)/2
+  weights <- mapply( function(arg){ sqrt(2) - norm(pos-arg, type="2")  },fourCorners)
+  values <- mapply( function(arg){ matx[ arg[1], arg[2]]},fourCorners)
+  
+  weighted.mean(values, weights)
 }
 
-tempFunc <- function( interation ){
-  (1 - 0.1)^interation
+mainFunc <- function( temparatureSpeed = 0.01, 
+                      maxIterations=1000, 
+                      neighbourGeneratingStdDeviation = 1,
+                      initialPos=c(50,50)){
+  if( !exists("matx")){
+    matx <- perlin_noise()
+  }
+  
+  plot.new()
+  plot.window( c(0,100), c(0,100))
+  #image(x = 0:100, y = 0:100, matx)
+  filled.contour(x = 1:100, y = 1:100, matx)
+  
+  title(main="main title", sub="sub-title", 
+        xlab="x-axis label", ylab="y-axis label")
+  res <- annealing ( costFunc = funcY, 
+              initialPos = initialPos, 
+              temperatureFunc = function(iteration){
+                (1 - temparatureSpeed)^iteration
+              },
+              infoConsumerFunc = function(bestPos, currentPos, generatedPos ){
+                #Sys.sleep(1)
+                if( identical(bestPos,generatedPos) ){
+                  pch <-3
+                } else if( identical(currentPos, generatedPos)){
+                  pch <-2
+                }else{
+                  pch <-1
+                }
+                fixedPos <- getPointFixedPosition(generatedPos)
+                points( fixedPos[1], fixedPos[2], pch=pch)
+                  
+              },
+              stoppingFunc = function(iteration ){
+                iteration > maxIterations
+              },
+              neighbourGenerator = function( currentPos ){
+                rand <-  rnorm( 2, currentPos, neighbourGeneratingStdDeviation)
+                randomNeighbour <- pmin( pmax(rand, 1 ), 100 ) 
+              }
+  )
+  message( sprintf("Najlepszy wynik to %.6f osiągnięty w punkcie[%.6f %.6f]", funcY(res), res[1], res[2]))
+  fixedBestPos <- getPointFixedPosition(res)
+  points( fixedBestPos[1], fixedBestPos[2], pch=20, col=15)
 }
 
-plotTest <- function(){
-  library(lattice)
-  
-  #Build the horizontal and vertical axis information
-  hor <- seq(0,100,10)
-  ver <- paste("DM1-", hor, sep="")
-  
-  #Build the fake correlation matrix
-  nrowcol <- length(ver)
-  cor <- matrix(runif(nrowcol*nrowcol, min=0.4), nrow=nrowcol, ncol=nrowcol)
-  for (i in 1:nrowcol) cor[i,i] = 1
-  
-  #Build the plot
-  rgb.palette <- colorRampPalette(c("blue", "yellow"), space = "rgb")
-  levelplot(cor, main="stage 12-14 array correlation matrix", xlab="", ylab="", col.regions=rgb.palette(120), cuts=100, at=seq(0,1,0.01)) 
+getPointFixedPosition <- function( pos ){
+  c(  (-2) + (pos[1])*0.8, pos[2])
 }
