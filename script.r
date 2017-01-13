@@ -79,6 +79,14 @@ run = function()
   # na tej podstawie jest wyliczane ile z tego źródła kupujemy jednostek
   sources["used"] = vector(mode="double", length=nrow(sources))
   
+  # ustawienie dla każdego źródła indexu zasobu
+  sources["resourcesIndex"] <- vector( mode="double", length=nrow(sources))
+  for( resourceIndex in 1:nrow(resources)){
+    sources[ sources$resource == resources$id[resourceIndex], ]$resourcesIndex <-resourceIndex 
+  }
+  # zapisanie indeksu źródła w dataframe
+  sources["sourceIndex"] <- 1:nrow(sources) 
+
   # ======================================================
   # =============== WALIDACJA DANYCH =====================
   # ======================================================
@@ -117,60 +125,35 @@ run = function()
   maxCost <- 0
   
   costFunction <- function(pos) {
-    distance = function(xs, ys, px, py) {
-      
-      #return(dist(rbind(p1, p2))[1])
-      
-      return(sqrt((xs-px)^2 + (ys-py)^2))
+    distance = function(pos1, pos2) {
+      norm( pos1- pos2, type="2")
     }
     
-    # --- wyliczanie wartości unitcost oraz used
-    for(id in resources$id)
-    {
-      required = resources[resources$id == id,]$required
-      
-      
-      #sourcesMatching$unitcost = sourcesMatching$cost + distance(c(sourcesMatching$x, sourcesMatching$y), pos)*resources[resources$id == id,]$transport
-      sources[sources$resource == id,]$unitcost = 
-        sources[sources$resource == id,]$cost + 
-        distance(sources[sources$resource == id,]$x, sources[sources$resource == id,]$y, pos[1], pos[2])*resources[resources$id == id,]$transport
-      
-      sourcesMatching = sources[sources$resource == id,]
-      
-      while(required > 0)
-      {
-        # znalezienie najtańszego źródła
-        
-        idChosen = sourcesMatching[sourcesMatching$unitcost == min(sourcesMatching$unitcost),]$id[1]
-        sourcesMatching[sourcesMatching$id == idChosen,]$used = min(required, sourcesMatching$limit)
-        sources[sources$id == idChosen,]$used = sourcesMatching[sourcesMatching$id == idChosen,]$used
-        required = required - sourcesMatching[sourcesMatching$id == idChosen,]$used
-        
-        sourcesMatching = sourcesMatching[sourcesMatching$id != idChosen,]
+    # --- oblicz koszt jednostkowy dla każdego źródła
+    for( index in  1:nrow(sources) ){
+      resource <- resources[sources$resourcesIndex[index],]
+      sources$unitcost[index] <-
+          (sources$cost[index] 
+          + distance( c(sources$x[index], sources$y[index] ), pos) * resource$transport)
+    }
+    
+    sum <- 0
+    # --- dla każdego zasobu
+    for( index in  1:nrow(resources)  ){
+      # znajdź źródła które tworzą dany zasób
+      sourcesMatching = sources[ sources$resourcesIndex == index,]
+      required <- resources$required[index]
+      orderedSourcesByCheapest <- sourcesMatching[with(sourcesMatching, order(unitcost, decreasing = FALSE)),];
+      # przeglądaj źródła w kolejności roznącego kosztu jednostkowego
+      for( orderedIndex in 1:nrow(orderedSourcesByCheapest)){
+        used <- min(orderedSourcesByCheapest[orderedIndex,]$limit, required)
+        sum <- sum + used * sources[orderedSourcesByCheapest$sourceIndex[orderedIndex],]$unitcost;
+        sources[orderedSourcesByCheapest$sourceIndex[orderedIndex],]$used <- used
+        required <- required - used
       }
-    }
-    
-    # --- wyliczanie faktycznego kosztu ---
-    
-    c = 0
-    
-    for(id in sources$id)
-    {
-      source = sources[sources$id == id,]
       
-      #c = c + source$used*(source$cost + source$transport * distance(c(source$x, source$y), pos))
-      #c = c + source$used*(source$cost + source$transport * distance(sourcesMatching$x, sourcesMatching$y, pos[1], pos[2]))
-      c = c + source$used*(source$cost + resources[resources$id == source$resource,]$transport * distance(source$x, source$y, pos[1], pos[2]))
     }
-    
-    # c = (pos[1]-500)^2 + (pos[2]-500)^2
-    
-    minCost <<- min(minCost, c)
-    maxCost <<- max(maxCost, c)
-    
-    #cat('cost: ', c, '\n')
-    
-    return(c)
+    return (sum)  
   }
   
   infoFunction <- function(pos1, pos2) {
