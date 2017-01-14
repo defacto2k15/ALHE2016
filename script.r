@@ -7,16 +7,21 @@ run = function()
   YMIN <- 0
   YMAX <- 1000
   
+  ITERATIONS <- 2000
+  
+  XSTART <- 1000
+  YSTART <- 1000
+  
   annealing <- function(costFunc, initialPos, infoConsumerFunc )
   {
     tempFunc <- function( interation )
     {
-      (1 - 0.1)^interation
+      10000000 * (1 - 0.1)^(interation / ITERATIONS * 100)
     }
     
     bestPos <- initialPos
     
-    for(k in 1:200)
+    for(k in 1:ITERATIONS)
     {
       temperature <- tempFunc(k)
       #rand <-  rnorm( 2, bestPos, 10)
@@ -35,9 +40,12 @@ run = function()
       costNew <- costFunc(randomNeighbour)
       costOld <- costFunc(bestPos)
       
+      #prob <- exp(-abs(costNew-costOld)/temperature)
+      #cat("iter: ", k, ". rej.prob: ", prob, '\n')
+      
       if( costNew < costOld ){
         bestPos <- randomNeighbour;
-      } else if ( runif(1,0,1) < exp(-abs(costNew-costOld)/temperature)){
+      } else if( runif(1,0,1) < exp(-abs(costNew-costOld)/temperature)) {
         bestPos <- randomNeighbour;
       }
       
@@ -75,20 +83,20 @@ run = function()
   
   resources = read.csv("resources.csv", stringsAsFactors=FALSE)
   sources = read.csv("sources.csv", stringsAsFactors=FALSE)
-  #  -- do obliczeÅ„:
+  #  -- do obliczeñ:
   # jednostkowy koszt zakupu + jednostkowy koszt przetransportowania do fabryki
   sources["unitcost"] = vector(mode="double", length=nrow(sources))
-  # na tej podstawie jest wyliczane ile z tego ÅºrÃ³dÅ‚a kupujemy jednostek
+  # na tej podstawie jest wyliczane ile z tego Ÿród³a kupujemy jednostek
   sources["used"] = vector(mode="double", length=nrow(sources))
   
-  # ustawienie dla kaÅ¼dego ÅºrÃ³dÅ‚a indexu zasobu
+  # ustawienie dla ka¿dego Ÿród³a indexu zasobu
   sources["resourcesIndex"] <- vector( mode="double", length=nrow(sources))
   for( resourceIndex in 1:nrow(resources)){
     sources[ sources$resource == resources$id[resourceIndex], ]$resourcesIndex <-resourceIndex 
   }
-  # zapisanie indeksu ÅºrÃ³dÅ‚a w dataframe
+  # zapisanie indeksu Ÿród³a w dataframe
   sources["sourceIndex"] <- 1:nrow(sources) 
-
+  
   # ======================================================
   # =============== WALIDACJA DANYCH =====================
   # ======================================================
@@ -104,7 +112,7 @@ run = function()
   }
   
   #TODO:
-  #* czy wspÃ³Å‚rzÄ™dne sÄ… w ramach 0-1000
+  #* czy wspó³rzêdne s¹ w ramach 0-1000
   #* czy ID produkowanego zasobu istnieje
   
   # ======================================================
@@ -131,22 +139,22 @@ run = function()
       norm( pos1- pos2, type="2")
     }
     
-    # --- oblicz koszt jednostkowy dla kaÅ¼dego ÅºrÃ³dÅ‚a
+    # --- oblicz koszt jednostkowy dla ka¿dego Ÿród³a
     for( index in  1:nrow(sources) ){
       resource <- resources[sources$resourcesIndex[index],]
       sources$unitcost[index] <-
-          (sources$cost[index] 
-          + distance( c(sources$x[index], sources$y[index] ), pos) * resource$transport)
+        (sources$cost[index] 
+         + distance( c(sources$x[index], sources$y[index] ), pos) * resource$transport)
     }
     
     sum <- 0
-    # --- dla kaÅ¼dego zasobu
+    # --- dla ka¿dego zasobu
     for( index in  1:nrow(resources)  ){
-      # znajdÅº ÅºrÃ³dÅ‚a ktÃ³re tworzÄ… dany zasÃ³b
+      # znajdŸ Ÿród³a które tworz¹ dany zasób
       sourcesMatching = sources[ sources$resourcesIndex == index,]
       required <- resources$required[index]
       orderedSourcesByCheapest <- sourcesMatching[with(sourcesMatching, order(unitcost, decreasing = FALSE)),];
-      # przeglÄ…daj ÅºrÃ³dÅ‚a w kolejnoÅ›ci roznÄ…cego kosztu jednostkowego
+      # przegl¹daj Ÿród³a w kolejnoœci rozn¹cego kosztu jednostkowego
       for( orderedIndex in 1:nrow(orderedSourcesByCheapest)){
         used <- min(orderedSourcesByCheapest[orderedIndex,]$limit, required)
         sum <- sum + used * sources[orderedSourcesByCheapest$sourceIndex[orderedIndex],]$unitcost;
@@ -159,13 +167,13 @@ run = function()
   }
   
   infoFunction <- function(pos1, pos2) {
-    drawPointOnContour(pos1[1], pos1[2], col="black", pch=7)
+    drawPointOnContour(pos1[1], pos1[2], col="black", pch=5)
   }
   
   plot(c(), c(), xlim=c(0, 1000), ylim=c(0, 1000))
   
   # --- warstwice ---
-  # wyliczanie wartoÅ›ci funkcji w prÃ³bkowanych punktach
+  # wyliczanie wartoœci funkcji w próbkowanych punktach
   contourValuesMatrix <- matrix( nrow=21, ncol=21)
   for(x in seq(from=0, to=1000, by=50)){
     for(y in seq(from=0, to=1000, by=50)){
@@ -173,18 +181,18 @@ run = function()
       #points(c(x), c(y), pch=20, col=colorFromRange(costFunction(c(x, y)), 50000000, 170000000))
     }
   }
- 
+  
   # wysowanie konturu
   contourX <- 50 * 1:nrow(contourValuesMatrix);
   contourY <- 50 * 1:ncol(contourValuesMatrix);
   filled.contour(x = contourX -50 , y=contourY - 50, z=contourValuesMatrix)
-  # --- ÅºrÃ³dÅ‚a ---
+  # --- Ÿród³a ---
   
   drawPointOnContour(sources$x, sources$y, pch=8, col="#FF0000")
   
-  # --- wyÅ¼arzanie ---
+  # --- wy¿arzanie ---
   
-  annealing(costFunction, c(0,0), infoFunction)
+  annealing(costFunction, c(XSTART, YSTART), infoFunction)
   
   cat('Min Cost detected: ', minCost, '\n')
   cat('Max Cost detected: ', maxCost, '\n')
@@ -196,6 +204,9 @@ drawPointOnContour <- function (x,y, col='#FFFFFF', pch){
   xs <- -30 + x/1000 * 810;
   ys <- y;
   points(x=xs,y=y, col = col, pch=pch )
+  
+  # oznaczanie Ÿróde³ labelkami: kompletnie tymczasowe
+  #text(x=xs, y=y+25, labels=c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"), cex= 0.7)
 }
 
 #run()
