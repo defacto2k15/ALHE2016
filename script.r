@@ -1,3 +1,5 @@
+require("lattice")
+
 run = function()
 {
   XMIN <- 0
@@ -157,20 +159,28 @@ run = function()
   }
   
   infoFunction <- function(pos1, pos2) {
-    points(pos1[1], pos1[2], col="black", pch=7)
+    drawPointOnContour(pos1[1], pos1[2], col="black", pch=7)
   }
   
   plot(c(), c(), xlim=c(0, 1000), ylim=c(0, 1000))
   
-  # --- poziomice ---
-  
-  for(x in seq(from=0, to=1000, by=50))
-    for(y in seq(from=0, to=1000, by=50))
-      points(c(x), c(y), pch=20, col=colorFromRange(costFunction(c(x, y)), 50000000, 170000000))
-  
+  # --- warstwice ---
+  # wyliczanie wartości funkcji w próbkowanych punktach
+  contourValuesMatrix <- matrix( nrow=21, ncol=21)
+  for(x in seq(from=0, to=1000, by=50)){
+    for(y in seq(from=0, to=1000, by=50)){
+      contourValuesMatrix[x/50+1,y/50+1] = costFunction(c(x, y))
+      #points(c(x), c(y), pch=20, col=colorFromRange(costFunction(c(x, y)), 50000000, 170000000))
+    }
+  }
+ 
+  # wysowanie konturu
+  contourX <- 50 * 1:nrow(contourValuesMatrix);
+  contourY <- 50 * 1:ncol(contourValuesMatrix);
+  filled.contour(x = contourX -50 , y=contourY - 50, z=contourValuesMatrix)
   # --- źródła ---
   
-  points(sources$x, sources$y, pch=8, col="#FF0000")
+  drawPointOnContour(sources$x, sources$y, pch=8, col="#FF0000")
   
   # --- wyżarzanie ---
   
@@ -182,7 +192,13 @@ run = function()
   return(TRUE)
 }
 
-run()
+drawPointOnContour <- function (x,y, col='#FFFFFF', pch){
+  xs <- -30 + x/1000 * 810;
+  ys <- y;
+  points(x=xs,y=y, col = col, pch=pch )
+}
+
+#run()
 
 
 
