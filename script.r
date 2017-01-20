@@ -12,46 +12,40 @@ run = function()
   XSTART <- 1000
   YSTART <- 1000
   
-  annealing <- function(costFunc, initialPos, infoConsumerFunc )
+  annealing <- function(costFunc, initialPos, infoConsumerFunc, tempFunc )
   {
-    tempFunc <- function( interation )
-    {
-      10000000 * (1 - 0.1)^(interation / ITERATIONS * 100)
-    }
-    
     bestPos <- initialPos
+    lastTemp <- NA;
+    temperature <- NA;
     
     for(k in 1:ITERATIONS)
     {
+      lastTemp <- temperature
       temperature <- tempFunc(k)
-      #rand <-  rnorm( 2, bestPos, 10)
-      #randomNeighbour <- c( max(0,  rand[1]), max(0,  rand[2]))
       
       randomNeighbour <-  rnorm( 2, bestPos, 10)
       randomNeighbour[1] <- min(XMAX, max(XMIN, randomNeighbour[1]))
       randomNeighbour[2] <- min(YMAX, max(YMIN, randomNeighbour[2]))
       
-      #if( costFunc (randomNeighbour) > costFunc(bestPos) ){
-      #  bestPos <- randomNeighbour;
-      #} else if ( runif(1,0,1) < exp( - abs(  costFunc (randomNeighbour)-costFunc(bestPos)  )/temperature  )){
-      #  bestPos <- randomNeighbour;
-      #}
-      
       costNew <- costFunc(randomNeighbour)
       costOld <- costFunc(bestPos)
       
-      #prob <- exp(-abs(costNew-costOld)/temperature)
-      #cat("iter: ", k, ". rej.prob: ", prob, '\n')
+      distances[k] <- abs(costNew-costOld);
       
       if( costNew < costOld ){
         bestPos <- randomNeighbour;
-      } else if( runif(1,0,1) < exp(-abs(costNew-costOld)/temperature)) {
-        bestPos <- randomNeighbour;
+        propabilities[k] <- NA;
+      }else {
+        propability <- exp(-abs(costNew-costOld)/temperature);
+        propabilities[k] <- propability;
+        
+        if( runif(1,0,1) < propability) {
+          bestPos <- randomNeighbour;
+        }
       }
-      
-      infoConsumerFunc(bestPos, randomNeighbour)
-      #message( sprintf("%i\t%.6f\t%.6f\t%.6ft%.6f\t%.6f", k, temperature,costFunc(bestPos), costFunc(randomNeighbour), bestPos[1], bestPos[2]))
-    }
+      propabilities <<- propabilities;
+      distances <<- distances;
+      infoConsumerFunc(bestPos, randomNeighbour)    }
   }
   
   colorFromRange = function(value, min, max)
@@ -83,18 +77,18 @@ run = function()
   
   resources = read.csv("resources.csv", stringsAsFactors=FALSE)
   sources = read.csv("sources.csv", stringsAsFactors=FALSE)
-  #  -- do obliczeñ:
+  #  -- do oblicze?:
   # jednostkowy koszt zakupu + jednostkowy koszt przetransportowania do fabryki
   sources["unitcost"] = vector(mode="double", length=nrow(sources))
-  # na tej podstawie jest wyliczane ile z tego Ÿród³a kupujemy jednostek
+  # na tej podstawie jest wyliczane ile z tego ?r?d?a kupujemy jednostek
   sources["used"] = vector(mode="double", length=nrow(sources))
   
-  # ustawienie dla ka¿dego Ÿród³a indexu zasobu
+  # ustawienie dla ka?dego ?r?d?a indexu zasobu
   sources["resourcesIndex"] <- vector( mode="double", length=nrow(sources))
   for( resourceIndex in 1:nrow(resources)){
     sources[ sources$resource == resources$id[resourceIndex], ]$resourcesIndex <-resourceIndex 
   }
-  # zapisanie indeksu Ÿród³a w dataframe
+  # zapisanie indeksu ?r?d?a w dataframe
   sources["sourceIndex"] <- 1:nrow(sources) 
   
   # ======================================================
@@ -112,7 +106,7 @@ run = function()
   }
   
   #TODO:
-  #* czy wspó³rzêdne s¹ w ramach 0-1000
+  #* czy wsp??rz?dne s? w ramach 0-1000
   #* czy ID produkowanego zasobu istnieje
   
   # ======================================================
@@ -139,7 +133,7 @@ run = function()
       norm( pos1- pos2, type="2")
     }
     
-    # --- oblicz koszt jednostkowy dla ka¿dego Ÿród³a
+    # --- oblicz koszt jednostkowy dla ka?dego ?r?d?a
     for( index in  1:nrow(sources) ){
       resource <- resources[sources$resourcesIndex[index],]
       sources$unitcost[index] <-
@@ -148,13 +142,13 @@ run = function()
     }
     
     sum <- 0
-    # --- dla ka¿dego zasobu
+    # --- dla ka?dego zasobu
     for( index in  1:nrow(resources)  ){
-      # znajdŸ Ÿród³a które tworz¹ dany zasób
+      # znajd? ?r?d?a kt?re tworz? dany zas?b
       sourcesMatching = sources[ sources$resourcesIndex == index,]
       required <- resources$required[index]
       orderedSourcesByCheapest <- sourcesMatching[with(sourcesMatching, order(unitcost, decreasing = FALSE)),];
-      # przegl¹daj Ÿród³a w kolejnoœci rozn¹cego kosztu jednostkowego
+      # przegl?daj ?r?d?a w kolejno?ci rozn?cego kosztu jednostkowego
       for( orderedIndex in 1:nrow(orderedSourcesByCheapest)){
         used <- min(orderedSourcesByCheapest[orderedIndex,]$limit, required)
         sum <- sum + used * sources[orderedSourcesByCheapest$sourceIndex[orderedIndex],]$unitcost;
@@ -172,30 +166,68 @@ run = function()
   
   plot(c(), c(), xlim=c(0, 1000), ylim=c(0, 1000))
   
+  #deklaracje globalnych zmiennych uÅ¼ywanych w f.wyrzarzajÄ…cej
+  propabilities <- vector( mode="double", length=ITERATIONS);
+  distances <- vector( mode="double", length=ITERATIONS);
+  sampledSteps <- vector( mode="double", length=((1000/50)^2));
+  
   # --- warstwice ---
-  # wyliczanie wartoœci funkcji w próbkowanych punktach
+  # wyliczanie warto?ci funkcji w pr?bkowanych punktach
   contourValuesMatrix <- matrix( nrow=21, ncol=21)
   for(x in seq(from=0, to=1000, by=50)){
     for(y in seq(from=0, to=1000, by=50)){
-      contourValuesMatrix[x/50+1,y/50+1] = costFunction(c(x, y))
-      #points(c(x), c(y), pch=20, col=colorFromRange(costFunction(c(x, y)), 50000000, 170000000))
+      #contourValuesMatrix[x/50+1,y/50+1] = costFunction(c(x, y))
+      # points(c(x), c(y), pch=20, col=colorFromRange(costFunction(c(x, y)), 50000000, 170000000))
+      
+      firstPointVal <- costFunction(c(x, y));
+      randomNeighbour <-  rnorm( 2, c(x,y), 10); #todo function to extract
+      secondPointVal <- costFunction(randomNeighbour);
+      sampledSteps[(x/50)*(1000/50) + (y/50) + 1] <- abs(firstPointVal - secondPointVal);
     }
   }
   
-  # wysowanie konturu
-  contourX <- 50 * 1:nrow(contourValuesMatrix);
-  contourY <- 50 * 1:ncol(contourValuesMatrix);
-  filled.contour(x = contourX -50 , y=contourY - 50, z=contourValuesMatrix)
-  # --- Ÿród³a ---
+  expectedValueOfValueDifference <- mean(sampledSteps);
+  expectedFirstT0Value <- 0.8;
+  T0 <- -(expectedValueOfValueDifference)/log(expectedFirstT0Value);
   
-  drawPointOnContour(sources$x, sources$y, pch=8, col="#FF0000")
+  # # wysowanie konturu
+  # contourX <- 50 * 1:nrow(contourValuesMatrix);
+  # contourY <- 50 * 1:ncol(contourValuesMatrix);
+  # filled.contour(x = contourX -50 , y=contourY - 50, z=contourValuesMatrix)
+  # # --- ?r?d?a ---
+  # 
+  # drawPointOnContour(sources$x, sources$y, pch=8, col="#FF0000")
+  # 
+  # # --- wy?arzanie ---
   
-  # --- wy¿arzanie ---
   
-  annealing(costFunction, c(XSTART, YSTART), infoFunction)
+  propabilitiesSum <-  vector( mode="double", length=ITERATIONS);
+  propabilitiesCount <-  vector( mode="double", length=ITERATIONS);
+  distancesSum <-  vector( mode="double", length=ITERATIONS);
+  for( i in 1:10 ){
+    annealing(costFunction, c(XSTART, YSTART), function(un1, un2){}, function (iteration){
+      T0 * ((0.9942)^iteration)
+    });
+    message("asdas\n");
+    for( j in 1:1000){
+      if(!is.na(propabilities[j]) ){
+        propabilitiesCount[j] <- propabilitiesCount[j]+1;
+      }
+    }
+    propabilitiesSum <- propabilitiesSum +  sapply( propabilities, FUN=function(x) ifelse(is.na(x),0,x) );
+    distancesSum <- distancesSum + distances;
+  }
   
-  cat('Min Cost detected: ', minCost, '\n')
-  cat('Max Cost detected: ', maxCost, '\n')
+  plot( propabilitiesSum/propabilitiesCount);
+  
+  # plot(exp( -(distancesSum/10)/ sapply( seq(1:1000), function (iteration){
+  #   T0 * (0.9942)*iteration
+  # })))
+  
+  # annealing(costFunction, c(XSTART, YSTART), infoFunction)
+  # 
+  # cat('Min Cost detected: ', minCost, '\n')
+  # cat('Max Cost detected: ', maxCost, '\n')
   
   return(TRUE)
 }
@@ -205,114 +237,9 @@ drawPointOnContour <- function (x,y, col='#FFFFFF', pch){
   ys <- y;
   points(x=xs,y=y, col = col, pch=pch )
   
-  # oznaczanie Ÿróde³ labelkami: kompletnie tymczasowe
+  # oznaczanie ?r?de? labelkami: kompletnie tymczasowe
   #text(x=xs, y=y+25, labels=c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"), cex= 0.7)
 }
 
 #run()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-perlin_noise <- function( 
-  n = 5,   m = 7,    # Size of the grid for the vector field
-  N = 100, M = 100   # Dimension of the image
-) {
-  # For each point on this n*m grid, choose a unit 1 vector
-  vector_field <- apply(
-    array( rnorm( 2 * n * m ), dim = c(2,n,m) ),
-    2:3,
-    function(u) u / sqrt(sum(u^2))
-  )
-  f <- function(x,y) {
-    # Find the grid cell in which the point (x,y) is
-    i <- floor(x)
-    j <- floor(y)
-    stopifnot( i >= 1 || j >= 1 || i < n || j < m )
-    # The 4 vectors, from the vector field, at the vertices of the square
-    v1 <- vector_field[,i,j]
-    v2 <- vector_field[,i+1,j]
-    v3 <- vector_field[,i,j+1]
-    v4 <- vector_field[,i+1,j+1]
-    # Vectors from the point to the vertices
-    u1 <- c(x,y) - c(i,j)
-    u2 <- c(x,y) - c(i+1,j)
-    u3 <- c(x,y) - c(i,j+1)
-    u4 <- c(x,y) - c(i+1,j+1)
-    # Scalar products
-    a1 <- sum( v1 * u1 )
-    a2 <- sum( v2 * u2 )
-    a3 <- sum( v3 * u3 )
-    a4 <- sum( v4 * u4 )
-    # Weighted average of the scalar products
-    s <- function(p) 3 * p^2 - 2 * p^3
-    p <- s( x - i )
-    q <- s( y - j )
-    b1 <- (1-p)*a1 + p*a2
-    b2 <- (1-p)*a3 + p*a4
-    (1-q) * b1 + q * b2
-  }
-  xs <- seq(from = 1, to = n, length = N+1)[-(N+1)]
-  ys <- seq(from = 1, to = m, length = M+1)[-(M+1)]
-  outer( xs, ys, Vectorize(f) )
-}
-
-matx <- perlin_noise()
-
-funcX <- function( pos ){
-  
-  matx[ pos[1], pos[2]]
-}
-
-funcY <- function( pos ){
-  x1Val <- funcX( c( floor(pos[1]), pos[2]) )
-  x2Val <- funcX( c( ceiling(pos[1]), pos[2]) )
-  y1Val <- funcX( c( pos[1], floor(pos[2]) ))
-  y2Val <- funcX( c( pos[1], ceiling(pos[2]) ))
-  
-  x <- pos[1] - floor(pos[1])
-  y <- pos[2] - floor(pos[2])
-  
-  ( x + y)/2
-}
-
-plotTest <- function(){
-  library(lattice)
-  
-  #Build the horizontal and vertical axis information
-  hor <- seq(0,100,10)
-  ver <- paste("DM1-", hor, sep="")
-  
-  #Build the fake correlation matrix
-  nrowcol <- length(ver)
-  cor <- matrix(runif(nrowcol*nrowcol, min=0.4), nrow=nrowcol, ncol=nrowcol)
-  for (i in 1:nrowcol) cor[i,i] = 1
-  
-  #Build the plot
-  rgb.palette <- colorRampPalette(c("blue", "yellow"), space = "rgb")
-  levelplot(cor, main="stage 12-14 array correlation matrix", xlab="", ylab="", col.regions=rgb.palette(120), cuts=100, at=seq(0,1,0.01)) 
-}
-
-#annealing(costFunction, c(0,0), tempFunc, infoFunction)
