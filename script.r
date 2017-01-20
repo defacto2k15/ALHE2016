@@ -12,7 +12,7 @@ run = function()
   XSTART <- 1000
   YSTART <- 1000
   
-  annealing <- function(costFunc, initialPos, infoConsumerFunc, tempFunc )
+  annealing <- function(costFunc, initialPos, infoConsumerFunc, tempFunc, randomNeighbourGenerator )
   {
     bestPos <- initialPos
     lastTemp <- NA;
@@ -23,9 +23,7 @@ run = function()
       lastTemp <- temperature
       temperature <- tempFunc(k)
       
-      randomNeighbour <-  rnorm( 2, bestPos, 10)
-      randomNeighbour[1] <- min(XMAX, max(XMIN, randomNeighbour[1]))
-      randomNeighbour[2] <- min(YMAX, max(YMIN, randomNeighbour[2]))
+      randomNeighbour <-  randomNeighbourGenerator(bestPos)
       
       costNew <- costFunc(randomNeighbour)
       costOld <- costFunc(bestPos)
@@ -45,7 +43,8 @@ run = function()
       }
       propabilities <<- propabilities;
       distances <<- distances;
-      infoConsumerFunc(bestPos, randomNeighbour)    }
+      infoConsumerFunc(bestPos, randomNeighbour)   
+    }
   }
   
   colorFromRange = function(value, min, max)
@@ -71,12 +70,17 @@ run = function()
     
   }
   
+  randomNeighbourGenerator <- function( bestPos ){
+    randomNeighbour <-  pmax(pmin(rnorm( 2, bestPos, 30), c(XMAX, YMAX)), c(XMIN, YMIN))
+    randomNeighbour;
+  }
+  
   # ======================================================
   # ======================================================
   # ======================================================
   
-  resources = read.csv("resources.csv", stringsAsFactors=FALSE)
-  sources = read.csv("sources.csv", stringsAsFactors=FALSE)
+  resources = read.csv("resources2.csv", stringsAsFactors=FALSE)
+  sources = read.csv("sources2.csv", stringsAsFactors=FALSE)
   #  -- do oblicze?:
   # jednostkowy koszt zakupu + jednostkowy koszt przetransportowania do fabryki
   sources["unitcost"] = vector(mode="double", length=nrow(sources))
@@ -160,8 +164,19 @@ run = function()
     return (sum)  
   }
   
-  infoFunction <- function(pos1, pos2) {
-    drawPointOnContour(pos1[1], pos1[2], col="black", pch=5)
+  
+  pointsXVec <- vector(mode="double", length=ITERATIONS); 
+  pointsYVec <- vector(mode="double", length=ITERATIONS); 
+  currentPointIndex <- 1;
+  infoFunction <- function(bestPos, currPos) {
+    if( currentPointIndex > ITERATIONS ){
+      currentPointIndex <- 1;
+      message("LOL");
+    }
+    pointsXVec[currentPointIndex] <<- currPos[1];
+    pointsYVec[currentPointIndex] <<- currPos[2];
+    currentPointIndex <<- currentPointIndex+1;
+    #drawPointOnContour(pos1[1], pos1[2], col="black", pch=5)
   }
   
   plot(c(), c(), xlim=c(0, 1000), ylim=c(0, 1000))
@@ -176,11 +191,11 @@ run = function()
   contourValuesMatrix <- matrix( nrow=21, ncol=21)
   for(x in seq(from=0, to=1000, by=50)){
     for(y in seq(from=0, to=1000, by=50)){
-      #contourValuesMatrix[x/50+1,y/50+1] = costFunction(c(x, y))
+      contourValuesMatrix[x/50+1,y/50+1] = costFunction(c(x, y))
       # points(c(x), c(y), pch=20, col=colorFromRange(costFunction(c(x, y)), 50000000, 170000000))
       
       firstPointVal <- costFunction(c(x, y));
-      randomNeighbour <-  rnorm( 2, c(x,y), 10); #todo function to extract
+      randomNeighbour <- randomNeighbourGenerator(c(x,y))
       secondPointVal <- costFunction(randomNeighbour);
       sampledSteps[(x/50)*(1000/50) + (y/50) + 1] <- abs(firstPointVal - secondPointVal);
     }
@@ -190,24 +205,29 @@ run = function()
   expectedFirstT0Value <- 0.8;
   T0 <- -(expectedValueOfValueDifference)/log(expectedFirstT0Value);
   
-  # # wysowanie konturu
-  # contourX <- 50 * 1:nrow(contourValuesMatrix);
-  # contourY <- 50 * 1:ncol(contourValuesMatrix);
-  # filled.contour(x = contourX -50 , y=contourY - 50, z=contourValuesMatrix)
-  # # --- ?r?d?a ---
+  # wysowanie konturu
+  contourX <- 50 * 1:nrow(contourValuesMatrix);
+  contourY <- 50 * 1:ncol(contourValuesMatrix);
+  filled.contour(x = contourX -50 , y=contourY - 50, z=contourValuesMatrix)
+  # --- ?r?d?a ---
   # 
   # drawPointOnContour(sources$x, sources$y, pch=8, col="#FF0000")
   # 
   # # --- wy?arzanie ---
   
+  annealing(costFunction, c(XSTART, YSTART), infoFunction, function (iteration){
+    T0 * (-atan((iteration - 300)/100)/(pi) + 0.5)
+  },randomNeighbourGenerator);
+  
+  filled.contour(x = contourX -50 , y=contourY - 50, z=contourValuesMatrix, plot.axes = { points(pointsXVec, pointsYVec); axis(1); axis(2) });
   
   propabilitiesSum <-  vector( mode="double", length=ITERATIONS);
   propabilitiesCount <-  vector( mode="double", length=ITERATIONS);
   distancesSum <-  vector( mode="double", length=ITERATIONS);
-  for( i in 1:10 ){
+  for( i in 1:3 ){
     annealing(costFunction, c(XSTART, YSTART), function(un1, un2){}, function (iteration){
-      T0 * ((0.9942)^iteration)
-    });
+      T0 * (-atan((iteration - 300)/100)/(pi) + 0.5)
+    }, randomNeighbourGenerator);
     message("asdas\n");
     for( j in 1:1000){
       if(!is.na(propabilities[j]) ){
@@ -219,10 +239,6 @@ run = function()
   }
   
   plot( propabilitiesSum/propabilitiesCount);
-  
-  # plot(exp( -(distancesSum/10)/ sapply( seq(1:1000), function (iteration){
-  #   T0 * (0.9942)*iteration
-  # })))
   
   # annealing(costFunction, c(XSTART, YSTART), infoFunction)
   # 
@@ -240,6 +256,9 @@ drawPointOnContour <- function (x,y, col='#FFFFFF', pch){
   # oznaczanie ?r?de? labelkami: kompletnie tymczasowe
   #text(x=xs, y=y+25, labels=c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"), cex= 0.7)
 }
+
+# T0*(-atan((iteration - 300)/100)/(pi) + 0.5))
+#plot(sapply(FUN=function(iteration){ exp(-distancesSum[iteration] /( T0*(-atan((iteration - 500)/300)/(pi) + 0.5)))}, X=1:1000))
 
 #run()
 
