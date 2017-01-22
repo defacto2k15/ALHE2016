@@ -1,18 +1,17 @@
 require("lattice")
 
-run = function()
+run = function(resourcesFileName = 'resources4.csv', sourcesFileName ='sources4.csv', contourImageFileName = NULL,
+               startPoint = c(XSTART, YSTART) )
 {
   XMIN <- 0
   XMAX <- 1000
   YMIN <- 0
   YMAX <- 1000
   
-  ITERATIONS <- 500
+  ITERATIONS <- 1000
   
   XSTART <- 1000
   YSTART <- 1000
-  
-
   
   annealing <- function(costFunc, initialPos, infoConsumerFunc, tempFunc, randomNeighbourGenerator )
   {
@@ -36,6 +35,7 @@ run = function()
         bestPos <- randomNeighbour;
         propabilities[k] <- NA;
         if( minCost > costNew){
+          minCostPosition <<- randomNeighbour
           minCost <<- costNew;
         }
         
@@ -53,29 +53,6 @@ run = function()
       
       
     }
-  }
-  
-  colorFromRange = function(value, min, max)
-  {
-    # min value = green
-    # max value = red
-    # yellow's in the middle
-    
-    strip = function(v)
-    {
-      return(max(0, min(1, v)))
-    }
-    
-    middle = (min+max)/2
-    
-    #if(value < middle)
-    #  return(rgb(1, strip(2/(max-min)*(value-min)), 0))
-    #return(rgb(strip(2/(min-max)*(value-max)), 1, 0))
-    
-    if(value < middle)
-      return(rgb(strip(2/(min-max)*(-value+min)), 1, 0))
-    return(rgb(1, strip(2/(max-min)*(-value+max)), 0))
-    
   }
   
   randomNeighbourGenerator <- function( bestPos ){
@@ -159,7 +136,7 @@ run = function()
     }
     
     # --------
-    
+    minCostPosition <<- startPoint;
     minCost <<- .Machine$integer.max
     maxCost <<- 0
     resources <<- resources
@@ -205,16 +182,11 @@ run = function()
     pointsXVec[currentPointIndex] <<- currPos[1];
     pointsYVec[currentPointIndex] <<- currPos[2];
     currentPointIndex <<- currentPointIndex+1;
-    #drawPointOnContour(pos1[1], pos1[2], col="black", pch=5)
   }
   
-  resourcesFileName <- 'resources4.csv';
-  sourcesFileName <-'sources4.csv';
-  contourImageFileName <- NULL;
+
   propabilitiesImageFileName <- NULL;
-  startPoint <- c(XSTART, YSTART);
   
-  #runAlgorithm <- function ( resourcesFileName, sourcesFileName, startPoint=c(XSTART, YSTART), contourImageFileName= NULL, propabilitiesImageFileName = NULL ){
     # do rysowania śladu
     pointsXVec <<- vector(mode="double", length=ITERATIONS); 
     pointsYVec <<- vector(mode="double", length=ITERATIONS); 
@@ -235,7 +207,6 @@ run = function()
     for(x in seq(from=0, to=1000, by=50)){
       for(y in seq(from=0, to=1000, by=50)){
         contourValuesMatrix[x/50+1,y/50+1] = costFunction(c(x, y))
-        # points(c(x), c(y), pch=20, col=colorFromRange(costFunction(c(x, y)), 50000000, 170000000))
         
         firstPointVal <- costFunction(c(x, y));
         randomNeighbour <- randomNeighbourGenerator(c(x,y))
@@ -266,7 +237,7 @@ run = function()
       T0 * (-atan((iteration - aParam)/bParam)/(pi) + 0.5)
     }
     
-    if( !is.null(contourImageFileName)){
+    if( (!is.na(contourImageFileName)) && (!is.null(contourImageFileName))){
       # wysowanie konturu
       contourX <- 50 * 1:nrow(contourValuesMatrix);
       contourY <- 50 * 1:ncol(contourValuesMatrix);
@@ -288,7 +259,7 @@ run = function()
     }
     propabilitiesSum <- propabilitiesSum +  sapply( propabilities, FUN=function(x) ifelse(is.na(x),0,x) );
     
-    if( !is.null(contourImageFileName)){
+    if( !is.na(contourImageFileName) && !is.null(contourImageFileName)){
       jpeg(contourImageFileName);
       filled.contour(x = contourX -50 , y=contourY - 50, z=contourValuesMatrix, plot.axes = { points(pointsXVec, pointsYVec); axis(1); axis(2) });
       dev.off();      
@@ -302,18 +273,7 @@ run = function()
       dev.off();
     }
     
-    cat('Min Cost detected: ', minCost, '\n')
+    cat('Min Cost detected: ', minCost, ' at point [',minCostPosition[1],',',minCostPosition[2],']\n')
     
     return(TRUE)
-  #}
-  
-  
-  #runAlgorithm('resources4.csv', 'sources4.csv', contourImageFileName = 'con1.jpeg');
 }
-
-
-# T0*(-atan((iteration - 300)/100)/(pi) + 0.5))
-#plot(sapply(FUN=function(iteration){ exp(-distancesSum[iteration] /( T0*(-atan((iteration - 500)/300)/(pi) + 0.5)))}, X=1:1000))
-
-#run()
-
